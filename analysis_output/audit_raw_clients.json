@@ -1,0 +1,75 @@
+{
+  "rows": 9799,
+  "columns": 4,
+  "column_types": {
+    "id": "str",
+    "age": "float64",
+    "gender": "str",
+    "net_worth": "float64"
+  },
+  "missing_total": 4778,
+  "missing_by_col": {
+    "id": 1,
+    "age": 983,
+    "gender": 3319,
+    "net_worth": 475
+  },
+  "missing_ratio_by_col": {
+    "id": 0.0001020512297173181,
+    "age": 0.10031635881212368,
+    "gender": 0.33870803143177874,
+    "net_worth": 0.048474334115726096
+  },
+  "duplicate_rows": 0,
+  "duplicate_rows_all": 0,
+  "duplicate_by_col": {
+    "id": 0,
+    "age": 9757,
+    "gender": 9796,
+    "net_worth": 475
+  },
+  "constant_cols": [],
+  "numeric_outliers_by_col": {
+    "age": {
+      "count": 0,
+      "percentage": 0.0,
+      "lower_bound": 0.0,
+      "upper_bound": 80.0
+    },
+    "net_worth": {
+      "count": 0,
+      "percentage": 0.0,
+      "lower_bound": -2433090.0525,
+      "upper_bound": 7423215.387500001
+    }
+  },
+  "numeric_summary_by_col": {
+    "age": {
+      "count": 8816.0,
+      "mean": 40.052291288566245,
+      "std": 11.82381003267175,
+      "min": 20.0,
+      "25%": 30.0,
+      "50%": 40.0,
+      "75%": 50.0,
+      "max": 60.0
+    },
+    "net_worth": {
+      "count": 9324.0,
+      "mean": 2501560.957657657,
+      "std": 1430786.589828474,
+      "min": 10213.97,
+      "25%": 1263024.4875,
+      "50%": 2488229.65,
+      "75%": 3727100.8475,
+      "max": 4999428.12
+    }
+  },
+  "str_summary_by_col": {
+    "gender": {
+      "nan": 3319,
+      "Женщина": 3286,
+      "Мужчина": 3194
+    }
+  }
+}

@@ -1,0 +1,678 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: ./src/**, main.py
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+./
+  src/
+    analysis.py
+    clean_data.py
+    generate_md_report.py
+    plot_analysis.py
+    utils.py
+main.py
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="./src/analysis.py">
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import LinearRegression
+import json
+
+
+def services_by_count(df: pd.DataFrame) -> pd.Series:
+    return df["service"].value_counts()
+
+
+def avg_transaction_amount_by_city(df: pd.DataFrame) -> pd.Series:
+    return (
+        pd.Series(df.groupby("city")["amount"].mean())
+        .sort_values(ascending=False)
+        .round(2)
+    )
+
+
+def services_by_transaction_amount(df: pd.DataFrame) -> pd.Series:
+    return (
+        pd.Series(df.groupby("service")["amount"].sum())
+        .sort_values(ascending=False)
+        .round(2)
+    )
+
+
+def payment_method_percentage(df: pd.DataFrame) -> pd.Series:
+    counts = df["payment_method"].value_counts()
+    return (counts / counts.sum() * 100).round(2)
+
+
+def last_month_amount_by_service(df: pd.DataFrame) -> pd.Series:
+    month_start = df["transaction_date"].max() - pd.DateOffset(months=1)
+    last_month_df = df[df["transaction_date"] >= month_start]
+    return (
+        pd.Series(last_month_df.groupby("service")["amount"].sum())
+        .sort_values(ascending=False)
+        .round(2)
+    )
+
+
+def categorize_client_net_worth(capital: float) -> str:
+    if capital < 100_000:
+        return "Низкий капитал"
+    elif capital <= 1_000_000:
+        return "Средний капитал"
+    else:
+        return "Высокий капитал"
+
+
+def client_net_worth_category_total_amount(df: pd.DataFrame) -> pd.Series:
+    categories = df["net_worth"].apply(categorize_client_net_worth)
+    return (
+        pd.Series(df.groupby(categories)["amount"].sum())
+        .sort_values(ascending=False)
+        .round(2)
+    )
+
+
+def avg_transaction_amount_by_client_age(df: pd.DataFrame) -> pd.Series:
+    return pd.Series(df.groupby("age")["amount"].mean()).round(2)
+
+
+def forecast_next_month(df: pd.DataFrame) -> dict:
+    df["transaction_date"] = pd.to_datetime(df["transaction_date"])
+
+    monthly_df = (
+        df.set_index("transaction_date")
+        .resample("ME")
+        .agg(
+            count=("amount", "count"),
+            amount=("amount", "sum"),
+        )
+        .reset_index()
+    )
+
+    monthly_df["time_index"] = range(len(monthly_df))
+
+    X = monthly_df[["time_index"]].values
+
+    model_count = LinearRegression()
+    model_amount = LinearRegression()
+
+    model_count.fit(X, monthly_df["count"])
+    model_amount.fit(X, monthly_df["amount"])
+
+    next_time = np.array([[monthly_df["time_index"].max() + 1]])
+
+    next_count = model_count.predict(next_time)[0]
+    next_amount = model_amount.predict(next_time)[0]
+
+    return {
+        "count": int(round(next_count)),
+        "amount": float(round(next_amount)),
+    }
+
+
+def run_analysis(merged_df: pd.DataFrame, save_file_name: str) -> dict:
+    results = {
+        "services_by_count": services_by_count(merged_df),
+        "services_by_transaction_amount": services_by_transaction_amount(merged_df),
+        "avg_transaction_amount_by_city": avg_transaction_amount_by_city(merged_df),
+        "payment_method_percentage": payment_method_percentage(merged_df),
+        "last_month_amount_by_service": last_month_amount_by_service(merged_df),
+        "client_net_worth_category_total_amount": client_net_worth_category_total_amount(
+            merged_df
+        ),
+        "avg_transaction_amount_by_client_age": avg_transaction_amount_by_client_age(
+            merged_df
+        ),
+        "forecast_next_month": forecast_next_month(merged_df),
+    }
+
+    with open(save_file_name, "w", encoding="utf-8") as f:
+        serializable = {}
+        for k, v in results.items():
+            if hasattr(v, "to_dict"):
+                serializable[k] = v.to_dict()
+            elif type(v) is dict:
+                serializable[k] = v
+        f.write(json.dumps(serializable, indent=2, ensure_ascii=False))
+        print(f"Results saved: {save_file_name}")
+
+    return results
+</file>
+
+<file path="./src/clean_data.py">
+import pandas as pd
+
+
+def clean_transactions(raw_df: pd.DataFrame) -> pd.DataFrame:
+    df = raw_df.copy()
+
+    # Drop rows with missing critical fields
+    df = df.dropna(subset=["client_id", "amount"])
+
+    # Standardize date format and handle invalid dates
+    df["transaction_date"] = pd.to_datetime(df["transaction_date"], errors="coerce")
+    df = df.dropna(subset=["transaction_date"])
+
+    # Remove transactions with non-positive amounts
+    df = df.loc[df["amount"] > 0]
+
+    # Drop duplicates
+    df = df.drop_duplicates(subset=["transaction_id"])
+
+    # Fill missing values in categorical fields
+    df["payment_method"] = df["payment_method"].fillna("Неизвестно")
+    df["service"] = df["service"].fillna("Неизвестная услуга")
+    df["city"] = df["city"].fillna("Неизвестный город")
+    df["consultant"] = df["consultant"].fillna("Неизвестный консультант")
+
+    df = df.reset_index(drop=True)
+
+    return df
+
+
+def clean_clients(raw_df: pd.DataFrame) -> pd.DataFrame:
+    df = raw_df.copy()
+
+    # Drop rows with missing critical fields
+    df = df.dropna(subset=["id"])
+
+    # Fill missing values
+    df["gender"] = df["gender"].fillna("Неизвестно")
+    df["net_worth"] = df["net_worth"].fillna(0)
+
+    df = df.reset_index(drop=True)
+
+    return df
+
+
+def merge_tables(transactions: pd.DataFrame, clients: pd.DataFrame) -> pd.DataFrame:
+    merged_df = transactions.merge(
+        clients, left_on="client_id", right_on="id", how="left", indicator=True
+    )
+
+    # Remove unmatched transactions
+    unmatched_count = (merged_df["_merge"] != "both").sum()
+    if unmatched_count > 0:
+        print(f"Merge: {unmatched_count} unmatched transactions found.")
+    merged_df = merged_df.loc[merged_df["_merge"] == "both"]
+    merged_df = merged_df.drop(columns="_merge")
+
+    return merged_df
+</file>
+
+<file path="./src/generate_md_report.py">
+import os
+import pandas as pd
+from datetime import datetime
+
+from .plot_analysis import plot_analysis
+
+
+def _table(data: pd.Series | pd.DataFrame, fmt: str = "{:,.0f}") -> str:
+    return data.apply(lambda x: fmt.format(x)).to_markdown()
+
+
+def generate_md_report(
+    results: dict[str, pd.Series],
+    df: pd.DataFrame,
+    save_path: str,
+) -> str:
+    report_dir = os.path.dirname(save_path)
+    plots_path = os.path.join(report_dir, "plots")
+    os.makedirs(plots_path, exist_ok=True)
+    plots = plot_analysis(results, df, plots_path)
+
+    report = f"""# Анализ финансовых транзакций
+{datetime.now().strftime("%d.%m.%Y %H:%M")}
+
+## Топ-5 услуг по количеству транзакций
+{_table(results["services_by_count"].head(5))}
+
+## Услуга с наибольшей выручкой
+{_table(results["services_by_transaction_amount"].head(1), "${:,.0f}")}
+
+## Выручка по услугам
+![Services by transaction amount]({os.path.relpath(plots["services_by_transaction_amount"], report_dir)})
+![Last month amount by service]({os.path.relpath(plots["last_month_amount_by_service"], report_dir)})
+
+## Топ-5 средних сумм транзакций по городам
+{_table(results["avg_transaction_amount_by_city"].head(5), "${:,.0f}")}
+
+## Выручка по категориям клиентов
+![Client net worth category total amount]({os.path.relpath(plots["client_net_worth_category_total_amount"], report_dir)})
+
+## Доля транзакций по способам оплаты
+![Payment method]({os.path.relpath(plots["payment_method_pie"], report_dir)})
+
+## Средняя сумма транзакции по возрасту клиента
+![Average transaction by age]({os.path.relpath(plots["avg_transaction_amount_by_client_age"], report_dir)})
+
+## Распределение сумм транзакций
+![Amount distribution]({os.path.relpath(plots["amount_distribution"], report_dir)})
+
+## Прогноз на следующий месяц
+Прогноз количества транзакций: {results["forecast_next_month"]["count"]}
+
+Прогноз выручки: ${results["forecast_next_month"]["amount"]:,.0f}
+
+![Forecast next month]({os.path.relpath(plots["forecast_next_month"], report_dir)})
+"""
+
+    with open(save_path, "w", encoding="utf-8") as f:
+        f.write(report)
+        print(f"Report generated: {save_path}")
+    return report
+</file>
+
+<file path="./src/plot_analysis.py">
+import os
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+
+sns.set_style("dark")
+sns.set_palette("muted")
+plt.style.use("dark_background")
+
+
+def plot_payment_method_pie(data: pd.Series, save_dir: str) -> str:
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.pie(
+        data,
+        labels=list(data.index),
+        autopct="%1.1f%%",
+        colors=sns.color_palette("Blues_d", n_colors=len(data))[::-1],
+        startangle=140,
+    )
+    ax.set_title("Доля транзакций по способам оплаты")
+    fig.tight_layout()
+    file_path = os.path.join(save_dir, "payment_method_pie.png")
+    fig.savefig(file_path)
+    plt.close(fig)
+    return file_path
+
+
+def plot_services_by_transaction_amount(data: pd.Series, save_dir: str) -> str:
+    fig, ax = plt.subplots(figsize=(10, 5))
+    bars = ax.barh(
+        data.index,
+        data / 1e6,
+        color=sns.color_palette("Greens_d", n_colors=len(data))[::-1],
+    )
+    ax.bar_label(bars, fmt="$%.1f млн.", padding=4, fontsize=9)
+    ax.set_xlabel("Выручка (млн. $)")
+    ax.set_ylabel("Услуга")
+    ax.set_title("Выручка по услугам")
+    fig.tight_layout()
+    file_path = os.path.join(save_dir, "services_by_transaction_amount.png")
+    fig.savefig(file_path)
+    plt.close(fig)
+    return file_path
+
+
+def plot_client_net_worth_category_total_amount(data: pd.Series, save_dir: str) -> str:
+    fig, ax = plt.subplots(figsize=(10, 8))
+    bars = ax.bar(
+        data.index,
+        data / 1e6,
+        color=sns.color_palette("Blues_d", n_colors=len(data))[::-1],
+    )
+    ax.bar_label(bars, fmt="$%.1f млн.", padding=4)
+    ax.set_xlabel("Категория активов")
+    ax.set_ylabel("Сумма транзакций (млн. $)")
+    ax.set_title("Выручка по категориям клиентов")
+    fig.tight_layout()
+    file_path = os.path.join(save_dir, "client_net_worth_category_total_amount.png")
+    fig.savefig(file_path)
+    plt.close(fig)
+    return file_path
+
+
+def plot_avg_transaction_by_age(data: pd.Series, save_dir: str) -> str:
+    fig, ax = plt.subplots(figsize=(11, 5))
+    smoothed = pd.Series(
+        data.sort_index().rolling(3, min_periods=1, center=True).mean()
+    )
+    ax.plot(smoothed.index, smoothed / 1_000, color="orange", linewidth=2)
+    ax.scatter(data.index, data / 1_000, color="orange", alpha=0.4, s=20)
+    ax.set_xlabel("Возраст клиента")
+    ax.set_ylabel("Средняя сумма транзакции (тыс. $)")
+    ax.set_title("Средняя сумма транзакции по возрасту клиента")
+    fig.tight_layout()
+    file_path = os.path.join(save_dir, "avg_transaction_amount_by_client_age.png")
+    fig.savefig(file_path)
+    plt.close(fig)
+    return file_path
+
+
+def plot_last_month_amount_by_service(data: pd.Series, save_dir: str) -> str:
+    fig, ax = plt.subplots(figsize=(10, 5))
+    bars = ax.barh(
+        data.index,
+        data / 1e6,
+        color=sns.color_palette("Reds_d", n_colors=len(data))[::-1],
+    )
+    ax.bar_label(bars, fmt="$%.1f млн.", padding=4, fontsize=9)
+    ax.set_xlabel("Выручка (млн. $)")
+    ax.set_ylabel("Услуга")
+    ax.set_title("Выручка по услугам за последний месяц")
+    fig.tight_layout()
+    file_path = os.path.join(save_dir, "last_month_amount_by_service.png")
+    fig.savefig(file_path)
+    plt.close(fig)
+    return file_path
+
+
+def plot_amount_distribution(data: pd.Series, save_dir: str) -> str:
+    fig, ax = plt.subplots(figsize=(10, 5))
+    sns.histplot(data / 1e3, bins=40, kde=True, color="lightgreen", ax=ax)
+    ax.set_xlabel("Сумма транзакции (тыс. $)")
+    ax.set_ylabel("Количество транзакций")
+    ax.set_title("Распределение сумм транзакций")
+    fig.tight_layout()
+    file_path = os.path.join(save_dir, "amount_distribution.png")
+    fig.savefig(file_path)
+    plt.close(fig)
+    return file_path
+
+
+def plot_forecast(df: pd.DataFrame, preds: dict, save_dir: str) -> str:
+    monthly_df = (
+        df.set_index("transaction_date")
+        .resample("ME")
+        .agg(
+            count=("amount", "count"),
+            amount=("amount", "sum"),
+        )
+        .reset_index()
+    )
+    next_month = monthly_df["transaction_date"].max() + pd.DateOffset(months=1)
+    all_dates = list(monthly_df["transaction_date"]) + [next_month]
+
+    fig, axes = plt.subplots(1, 2, figsize=(8, 5))
+    for ax, target, label in zip(
+        axes,
+        ["count", "amount"],
+        ["Количество транзакций", "Выручка (млн. $)"],
+    ):
+        scale = 1e6 if target == "amount" else 1
+        y = monthly_df[target] / scale
+        pred = preds[target] / scale
+        ax.bar(monthly_df["transaction_date"], y, width=20, color="skyblue")
+        ax.bar([next_month], [pred], color="red", width=20, label="Прогноз")
+        ax.set_title(label)
+        ax.set_xticks(all_dates)
+        ax.set_xticklabels(
+            [d.strftime("%b %Y") for d in all_dates], fontsize=8, ha="center"
+        )
+        ax.legend(fontsize=8)
+        fig.autofmt_xdate()
+
+    fig.suptitle("Прогноз на следующий месяц")
+    fig.tight_layout()
+    file_path = os.path.join(save_dir, "forecast_next_month.png")
+    fig.savefig(file_path)
+    plt.close(fig)
+    return file_path
+
+
+def plot_analysis(
+    analysis_results: dict, df: pd.DataFrame, save_dir: str
+) -> dict[str, str]:
+    return {
+        "services_by_transaction_amount": plot_services_by_transaction_amount(
+            analysis_results["services_by_transaction_amount"], save_dir
+        ),
+        "client_net_worth_category_total_amount": plot_client_net_worth_category_total_amount(
+            analysis_results["client_net_worth_category_total_amount"], save_dir
+        ),
+        "payment_method_pie": plot_payment_method_pie(
+            analysis_results["payment_method_percentage"], save_dir
+        ),
+        "avg_transaction_amount_by_client_age": plot_avg_transaction_by_age(
+            analysis_results["avg_transaction_amount_by_client_age"], save_dir
+        ),
+        "last_month_amount_by_service": plot_last_month_amount_by_service(
+            analysis_results["last_month_amount_by_service"], save_dir
+        ),
+        "amount_distribution": plot_amount_distribution(
+            pd.Series(df["amount"]), save_dir
+        ),
+        "forecast_next_month": plot_forecast(
+            df, analysis_results["forecast_next_month"], save_dir
+        ),
+    }
+</file>
+
+<file path="./src/utils.py">
+from typing import Optional, Literal
+import json
+import pandas as pd
+import numpy as np
+
+
+def detect_outliers(
+    series: pd.Series,
+    method: Literal["iqr", "zscore"] = "iqr",
+    zscore_threshold: float = 3.0,
+    zscore_ddof: int = 0,
+) -> dict:
+    series = series.dropna()
+
+    if series.empty:
+        return {
+            "count": 0,
+            "percentage": 0.0,
+            "lower_bound": None,
+            "upper_bound": None,
+        }
+
+    lower: float | None = None
+    upper: float | None = None
+    outliers = pd.Series(dtype=series.dtype)
+
+    if method == "iqr":
+        q1 = series.quantile(0.25)
+        q3 = series.quantile(0.75)
+        iqr = q3 - q1
+
+        lower = q1 - 1.5 * iqr
+        upper = q3 + 1.5 * iqr
+
+        mask = (series < lower) | (series > upper)
+        outliers = series[mask]
+
+    elif method == "zscore":
+        std = series.std(ddof=zscore_ddof)
+
+        if std == 0 or np.isnan(std):
+            return {
+                "count": 0,
+                "percentage": 0.0,
+                "lower_bound": None,
+                "upper_bound": None,
+            }
+
+        z_scores = (series - series.mean()) / std
+        mask = np.abs(z_scores) > zscore_threshold
+        outliers = series[mask]
+
+    return {
+        "count": int(len(outliers)),
+        "percentage": float(len(outliers) / len(series)),
+        "lower_bound": float(lower) if lower is not None else None,
+        "upper_bound": float(upper) if upper is not None else None,
+    }
+
+
+def audit_df(
+    df: pd.DataFrame,
+    outlier_method: Literal["iqr", "zscore"] = "iqr",
+    save_file_name: Optional[str] = None,
+    str_value_counts_exclude_col: Optional[list[str]] = None,
+) -> dict:
+    audit = {}
+
+    audit["rows"] = len(df)
+    audit["columns"] = len(df.columns)
+    audit["column_types"] = df.dtypes.astype(str).to_dict()
+
+    missing_counts = df.isna().sum()
+    audit["missing_total"] = int(missing_counts.sum())
+    audit["missing_by_col"] = missing_counts.to_dict()
+    audit["missing_ratio_by_col"] = (
+        (missing_counts / len(df)).to_dict() if len(df) > 0 else {}
+    )
+
+    audit["duplicate_rows"] = int(df.duplicated().sum())
+    audit["duplicate_rows_all"] = df[df.duplicated(keep=False)].shape[0]
+
+    audit["duplicate_by_col"] = {
+        col: int(df[col].duplicated().sum()) for col in df.columns
+    }
+
+    audit["constant_cols"] = [
+        col for col in df.columns if df[col].nunique(dropna=False) <= 1
+    ]
+
+    numeric_df = df.select_dtypes(include=np.number)
+
+    audit["numeric_outliers_by_col"] = {}
+    audit["numeric_summary_by_col"] = {}
+
+    for col, series in numeric_df.items():
+        audit["numeric_summary_by_col"][col] = (
+            series.describe().to_dict() if not series.dropna().empty else {}
+        )
+
+        audit["numeric_outliers_by_col"][col] = detect_outliers(
+            series=series,
+            method=outlier_method,
+        )
+
+    audit["str_summary_by_col"] = {}
+    for col in df.select_dtypes(include="str").columns:
+        if col in str_value_counts_exclude_col:
+            continue
+        counts = df[col].value_counts(dropna=False)
+        audit["str_summary_by_col"][col] = {
+            str(value): int(count) for value, count in counts.items()
+        }
+
+    if save_file_name is not None:
+        with open(save_file_name, "w", encoding="utf-8") as f:
+            json_str = json.dumps(audit, indent=2, ensure_ascii=False)
+            f.write(json_str)
+        print(f"Audit saved: {save_file_name}")
+
+    return audit
+</file>
+
+<file path="main.py">
+import os
+import pandas as pd
+
+from src.clean_data import clean_transactions, clean_clients, merge_tables
+from src.analysis import run_analysis
+from src.utils import audit_df
+from src.generate_md_report import generate_md_report
+
+
+def main() -> None:
+    # Load tables
+    transactions_file = "./data/transactions_data.xlsx"
+    clients_file = "./data/clients_data.json"
+    transactions_raw = pd.read_excel(transactions_file)
+    clients_raw = pd.read_json(clients_file)
+
+    output_dir = "./analysis_output"
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Audit raw data
+    audit_df(
+        transactions_raw,
+        save_file_name=f"{output_dir}/audit_raw_transactions.json",
+        str_value_counts_exclude_col=["transaction_id", "client_id"],
+    )
+    audit_df(
+        clients_raw,
+        save_file_name=f"{output_dir}/audit_raw_clients.json",
+        str_value_counts_exclude_col=["id"],
+    )
+
+    # Clean data
+    transactions = clean_transactions(transactions_raw)
+    clients = clean_clients(clients_raw)
+
+    # Audit clean data
+    audit_df(
+        transactions,
+        save_file_name=f"{output_dir}/audit_transactions.json",
+        str_value_counts_exclude_col=["client_id"],
+    )
+    audit_df(
+        clients,
+        save_file_name=f"{output_dir}/audit_clients.json",
+        str_value_counts_exclude_col=["id"],
+    )
+
+    merged_df = merge_tables(transactions, clients)
+    analysis_results = run_analysis(
+        merged_df, save_file_name=f"{output_dir}/analysis_results.json"
+    )
+
+    generate_md_report(
+        analysis_results,
+        df=merged_df,
+        save_path=f"{output_dir}/report.md",
+    )
+
+
+if __name__ == "__main__":
+    main()
+</file>
+
+</files>
