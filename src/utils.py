@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Optional, Literal
 import json
 import pandas as pd
@@ -61,7 +62,7 @@ def detect_outliers(
 def audit_df(
     df: pd.DataFrame,
     outlier_method: Literal["iqr", "zscore"] = "iqr",
-    save_file_name: Optional[str] = None,
+    save_file_name: Optional[Path] = None,
     str_value_counts_exclude_col: Optional[list[str]] = None,
 ) -> dict:
     audit = {}

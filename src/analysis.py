@@ -1,3 +1,4 @@
+from pathlib import Path
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
@@ -101,7 +102,7 @@ def forecast_next_month(df: pd.DataFrame) -> dict:
     }
 
 
-def run_analysis(merged_df: pd.DataFrame, save_file_name: str) -> dict:
+def run_analysis(merged_df: pd.DataFrame, save_file_name: Path) -> dict:
     results = {
         "services_by_count": services_by_count(merged_df),
         "services_by_transaction_amount": services_by_transaction_amount(merged_df),
